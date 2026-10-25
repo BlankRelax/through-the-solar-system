@@ -1,0 +1,86 @@
+name: Build, check and publish
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      # Must match the wasm-bindgen version pinned in Cargo.toml.
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-bindgen-cli@0.2.129
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: cargo test
+      - run: node scripts/build.mjs
+      # Flies to a few objects in headless Chrome; fails on any console or WebGL error.
+      - run: node scripts/check.mjs earth saturn kuiper-belt voyager-1
+        env:
+          CI: 'true'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: screenshots
+          path: .check
+          retention-days: 7
+      - uses: actions/upload-artifact@v4
+        with:
+          name: single-file
+          path: dist-single/through-the-solar-system.html
+          if-no-files-found: error
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  pages:
+    if: github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: single-file
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: through-the-solar-system.html
+          body: |
+            `through-the-solar-system.html` is the whole game in one file: download it and open it
+            in any modern browser (Chrome, Edge, Firefox or Safari with WebGL2). No server or
+            internet connection needed. Or play online at https://blankrelax.github.io/through-the-solar-system/

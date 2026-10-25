@@ -1,0 +1,705 @@
+/* Through the Solar System: everything around the canvas. The game lives in
+   any element with a size; colours and spacing are the variables below. */
+
+.tss {
+  --tss-bg: #000;
+  --tss-glass: rgba(10, 16, 14, 0.78);
+  --tss-glass-strong: rgba(10, 16, 14, 0.94);
+  --tss-line: rgba(163, 201, 160, 0.28);
+  --tss-text: #e3eadf;
+  --tss-muted: #a3b09f;
+  --tss-accent: #a3c9a0;
+  --tss-accent-ink: #0c120d;
+  --tss-craft: #8fd3ff;
+  --tss-radius: 6px;
+  --tss-mono: ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas, monospace;
+
+  position: relative;
+  overflow: hidden;
+  background: var(--tss-bg);
+  color: var(--tss-text);
+  font-size: 15px;
+  line-height: 1.5;
+  container-type: size;
+  container-name: tss;
+  isolation: isolate;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.tss:focus {
+  outline: none;
+}
+
+.tss:focus-visible {
+  outline: 2px solid var(--tss-accent);
+  outline-offset: -2px;
+}
+
+.tss *,
+.tss *::before,
+.tss *::after {
+  box-sizing: border-box;
+}
+
+.tss .tss-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+  cursor: grab;
+}
+
+.tss .tss-canvas:active {
+  cursor: grabbing;
+}
+
+.tss button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.tss button:focus-visible,
+.tss a:focus-visible {
+  outline: 2px solid var(--tss-accent);
+  outline-offset: 2px;
+}
+
+.tss [hidden] {
+  display: none !important;
+}
+
+/* --- labels ------------------------------------------------------------- */
+
+.tss .tss-labels {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.tss .tss-label {
+  position: absolute;
+  left: 0;
+  top: 0;
+  translate: -50% 0;
+  min-height: 24px;
+  padding: 2px 7px;
+  border: 0;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.35);
+  color: var(--tss-text);
+  font-family: var(--tss-mono);
+  font-size: 12px;
+  line-height: 20px;
+  white-space: nowrap;
+  pointer-events: auto;
+  opacity: 0.88;
+  transition: opacity 120ms, background-color 120ms;
+}
+
+.tss .tss-label:hover,
+.tss .tss-label:focus-visible,
+.tss .tss-label.is-selected {
+  opacity: 1;
+  background: rgba(12, 18, 13, 0.85);
+  color: #fff;
+}
+
+.tss .tss-label.is-selected {
+  box-shadow: inset 0 0 0 1px var(--tss-accent);
+}
+
+.tss .tss-label--star { color: #ffe2a8; }
+.tss .tss-label--planet { color: #f2f5ef; font-size: 13px; }
+.tss .tss-label--dwarf { color: #e8d5c4; }
+.tss .tss-label--moon { color: #c9cfd6; font-size: 11px; }
+.tss .tss-label--minor { color: #d8c8b8; font-size: 11px; }
+.tss .tss-label--craft { color: var(--tss-craft); }
+.tss .tss-label--region { color: #ffd6a0; font-style: italic; }
+.tss .tss-label--hypothetical { color: #a9c6ff; font-style: italic; border: 1px dashed rgba(169, 198, 255, 0.6); }
+
+/* --- the readout ---------------------------------------------------------- */
+
+.tss .tss-hud {
+  position: absolute;
+  top: 10px;
+  left: 12px;
+  max-width: min(460px, calc(100% - 24px));
+  padding: 8px 12px;
+  border-radius: var(--tss-radius);
+  background: rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+  font-family: var(--tss-mono);
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--tss-muted);
+}
+
+.tss .tss-hud p {
+  margin: 0;
+}
+
+.tss .tss-hud .tss-title {
+  font-family: inherit;
+  color: var(--tss-accent);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-size: 11px;
+}
+
+.tss .tss-hud .tss-date {
+  color: var(--tss-text);
+}
+
+/* --- the control bar ------------------------------------------------------ */
+
+.tss .tss-bar {
+  position: absolute;
+  left: 50%;
+  bottom: 10px;
+  translate: -50% 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px 10px;
+  max-width: calc(100% - 16px);
+  padding: 6px;
+  border: 1px solid var(--tss-line);
+  border-radius: 10px;
+  background: var(--tss-glass);
+  backdrop-filter: blur(6px);
+}
+
+.tss .tss-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.tss .tss-bar button {
+  min-width: 32px;
+  min-height: 32px;
+  padding: 4px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--tss-radius);
+  background: rgba(255, 255, 255, 0.06);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.tss .tss-bar button:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.tss .tss-bar button[aria-pressed="true"] {
+  border-color: var(--tss-line);
+  color: var(--tss-accent);
+}
+
+.tss .tss-bar button[aria-pressed="false"][data-action="orbits"],
+.tss .tss-bar button[aria-pressed="false"][data-action="labels"] {
+  color: var(--tss-muted);
+  text-decoration: line-through;
+}
+
+.tss .tss-hud .tss-warp {
+  color: var(--tss-muted);
+}
+
+.tss .tss-hud .tss-warp::before {
+  content: " · ";
+}
+
+/* --- the information panel ------------------------------------------------ */
+
+.tss .tss-panel {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  bottom: 70px;
+  width: min(390px, calc(100% - 20px));
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--tss-line);
+  border-radius: 10px;
+  background: var(--tss-glass-strong);
+  backdrop-filter: blur(8px);
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.tss .tss-panel-scroll {
+  overflow-y: auto;
+  padding: 14px 16px 18px;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(163, 201, 160, 0.4) transparent;
+}
+
+.tss .tss-panel-head {
+  position: relative;
+  padding-right: 36px;
+}
+
+.tss .tss-kind {
+  margin: 0;
+  font-family: var(--tss-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--tss-accent);
+}
+
+.tss .tss-panel h2 {
+  margin: 2px 0 6px;
+  font-size: 24px;
+  line-height: 1.2;
+  font-weight: 600;
+  color: #fff;
+}
+
+.tss .tss-close {
+  position: absolute;
+  top: -4px;
+  right: -6px;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: var(--tss-radius);
+  background: transparent;
+  font-size: 22px;
+  line-height: 1;
+}
+
+.tss .tss-close:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.tss .tss-tagline {
+  margin: 0 0 12px;
+  color: var(--tss-text);
+  font-style: italic;
+}
+
+.tss .tss-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 12px;
+}
+
+.tss .tss-actions button {
+  min-height: 34px;
+  padding: 6px 12px;
+  border: 1px solid var(--tss-line);
+  border-radius: var(--tss-radius);
+  background: rgba(255, 255, 255, 0.06);
+  font-size: 13px;
+}
+
+.tss .tss-actions button:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.tss .tss-live {
+  margin: 0 0 12px;
+  padding: 8px 10px;
+  border-left: 2px solid var(--tss-accent);
+  background: rgba(163, 201, 160, 0.08);
+  font-family: var(--tss-mono);
+  font-size: 12px;
+  color: var(--tss-text);
+}
+
+.tss .tss-stats {
+  display: grid;
+  grid-template-columns: 1fr;
+  margin: 0 0 6px;
+  font-size: 13px;
+}
+
+.tss .tss-stats div {
+  display: grid;
+  grid-template-columns: 9.5em 1fr;
+  gap: 8px;
+  padding: 4px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.tss .tss-stats dt {
+  color: var(--tss-muted);
+}
+
+.tss .tss-stats dd {
+  margin: 0;
+}
+
+.tss .tss-panel h3 {
+  margin: 18px 0 8px;
+  font-size: 13px;
+  font-family: var(--tss-mono);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--tss-accent);
+}
+
+.tss .tss-facts,
+.tss .tss-ideas,
+.tss .tss-missions,
+.tss .tss-legend {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tss .tss-facts li,
+.tss .tss-ideas li {
+  margin: 0 0 10px;
+  padding: 0 0 10px 12px;
+  border-left: 2px solid rgba(163, 201, 160, 0.45);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.tss .tss-ideas li {
+  border-left-color: rgba(169, 198, 255, 0.45);
+}
+
+.tss .tss-facts p,
+.tss .tss-ideas p {
+  margin: 0;
+  font-size: 14px;
+}
+
+.tss .tss-source {
+  margin-top: 3px !important;
+  font-family: var(--tss-mono);
+  font-size: 11px !important;
+  color: var(--tss-muted);
+}
+
+.tss .tss-badge {
+  display: inline-block;
+  margin: 0 0 4px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-family: var(--tss-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  border: 1px solid currentColor;
+}
+
+.tss .tss-badge--fact { color: #a3c9a0; }
+.tss .tss-badge--leading { color: #8fd3ff; }
+.tss .tss-badge--supported { color: #9be7c4; }
+.tss .tss-badge--debated { color: #f5c46b; }
+.tss .tss-badge--open { color: #c9b6ff; }
+.tss .tss-badge--disputed { color: #ff9b8a; }
+.tss .tss-badge--speculative { color: #f0a6d8; }
+
+.tss .tss-missions li {
+  position: relative;
+  padding: 3px 0 3px 14px;
+  font-size: 13px;
+  color: var(--tss-text);
+}
+
+.tss .tss-missions li::before {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 0.85em;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--tss-accent);
+}
+
+/* --- toast ------------------------------------------------------------------ */
+
+.tss .tss-toast {
+  position: absolute;
+  left: 50%;
+  top: 12px;
+  translate: -50% -8px;
+  max-width: min(520px, calc(100% - 24px));
+  padding: 8px 14px;
+  border: 1px solid var(--tss-line);
+  border-radius: 999px;
+  background: var(--tss-glass-strong);
+  font-size: 13px;
+  text-align: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 250ms, translate 250ms;
+}
+
+.tss .tss-toast.is-on {
+  opacity: 1;
+  translate: -50% 0;
+}
+
+/* --- overlays: intro, help, journal ------------------------------------------ */
+
+.tss .tss-overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.45);
+  overflow-y: auto;
+}
+
+.tss .tss-intro {
+  background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.25), rgba(0, 0, 0, 0.7));
+}
+
+.tss .tss-card {
+  width: min(560px, 100%);
+  max-height: 100%;
+  overflow-y: auto;
+  padding: 22px 24px;
+  border: 1px solid var(--tss-line);
+  border-radius: 12px;
+  background: var(--tss-glass-strong);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.tss .tss-card--wide {
+  width: min(720px, 100%);
+}
+
+.tss .tss-card h2 {
+  margin: 0 0 10px;
+  font-size: 26px;
+  line-height: 1.2;
+  color: #fff;
+}
+
+.tss .tss-card h2 + p,
+.tss .tss-card p {
+  margin: 0 0 12px;
+}
+
+.tss .tss-card h2:not(:first-child) {
+  margin-top: 22px;
+  font-size: 19px;
+}
+
+.tss .tss-kicker {
+  margin: 0 0 4px !important;
+  font-family: var(--tss-mono);
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--tss-accent);
+}
+
+.tss .tss-small {
+  font-size: 12.5px;
+  color: var(--tss-muted);
+}
+
+.tss .tss-card a {
+  color: var(--tss-accent);
+}
+
+.tss .tss-keys {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 0 18px;
+  margin: 0;
+  font-size: 13.5px;
+}
+
+.tss .tss-keys div {
+  display: grid;
+  grid-template-columns: 9em 1fr;
+  gap: 8px;
+  padding: 4px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.tss .tss-keys dt {
+  font-family: var(--tss-mono);
+  font-size: 12px;
+  color: var(--tss-accent);
+}
+
+.tss .tss-keys dd {
+  margin: 0;
+}
+
+.tss .tss-legend li {
+  margin: 0 0 6px;
+  font-size: 13.5px;
+}
+
+.tss .tss-legend .tss-badge {
+  margin-right: 6px;
+}
+
+.tss .tss-journal-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 6px;
+  margin: 0 0 14px;
+  padding: 0;
+  list-style: none;
+}
+
+.tss .tss-journal-list button {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  min-height: 36px;
+  padding: 6px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--tss-radius);
+  background: rgba(255, 255, 255, 0.03);
+  text-align: left;
+  color: var(--tss-muted);
+}
+
+.tss .tss-journal-list button:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.tss .tss-journal-list button.is-visited {
+  color: var(--tss-text);
+  border-color: var(--tss-line);
+}
+
+.tss .tss-check {
+  width: 1em;
+  color: var(--tss-accent);
+}
+
+.tss .tss-kind-small {
+  margin-left: auto;
+  font-family: var(--tss-mono);
+  font-size: 10.5px;
+  color: var(--tss-muted);
+}
+
+.tss-unsupported {
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  text-align: center;
+  color: var(--tss-text, #e3eadf);
+}
+
+@container tss (max-width: 900px) {
+  .tss .tss-toast {
+    top: auto;
+    bottom: 96px;
+  }
+
+  .tss .tss-bar {
+    gap: 4px 6px;
+  }
+
+  .tss .tss-bar button {
+    padding: 4px 8px;
+  }
+
+  .tss .tss-panel {
+    bottom: 100px;
+  }
+}
+
+/* --- small screens: the panel becomes a bottom sheet --------------------------- */
+
+@container tss (max-width: 640px) {
+  .tss .tss-hud {
+    font-size: 11px;
+    padding: 6px 9px;
+  }
+
+  .tss .tss-hud .tss-where {
+    display: none;
+  }
+
+  .tss .tss-bar {
+    gap: 4px;
+    padding: 4px;
+    bottom: 6px;
+  }
+
+  .tss .tss-bar button {
+    min-width: 30px;
+    padding: 3px 7px;
+    font-size: 12px;
+  }
+
+  .tss .tss-hud .tss-warp {
+    display: block;
+  }
+
+  .tss .tss-hud .tss-warp::before {
+    content: none;
+  }
+
+  .tss .tss-panel {
+    top: auto;
+    left: 6px;
+    right: 6px;
+    bottom: 6px;
+    width: auto;
+    max-height: 58%;
+  }
+
+  .tss .tss-panel h2 {
+    font-size: 20px;
+  }
+
+  .tss .tss-stats div {
+    grid-template-columns: 8em 1fr;
+  }
+}
+
+@container tss (max-height: 520px) {
+  .tss .tss-hud .tss-near,
+  .tss .tss-hud .tss-where {
+    display: none;
+  }
+
+  .tss .tss-panel {
+    bottom: 56px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tss .tss-toast,
+  .tss .tss-label {
+    transition: none;
+  }
+}
+
+/* when the game fills the screen */
+.tss:fullscreen {
+  width: 100vw;
+  height: 100vh;
+}
+
+/* the main call to action wins over the plain button styles above */
+.tss button.tss-primary {
+  background: var(--tss-accent);
+  color: var(--tss-accent-ink);
+  border-color: var(--tss-accent);
+  font-weight: 600;
+}
+
+.tss button.tss-primary:hover {
+  background: #bfe0bb;
+}
