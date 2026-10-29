@@ -177,7 +177,15 @@ impl Sim {
         // Look at the lit side, from a little above and to one side.
         let to_sun = (-s.pos).normalize_or(DVec3::X);
         let side = to_sun.cross(DVec3::Y).normalize_or(DVec3::Z);
-        let dir = (to_sun * 0.75 + side * 0.55 + DVec3::Y * 0.3).normalize();
+        let mut dir = (to_sun * 0.75 + side * 0.55 + DVec3::Y * 0.3).normalize();
+        // Rings: look from the face the Sun lights, which near a ring-plane
+        // crossing can be the southern one.
+        if b.look.rings.is_some() {
+            let n = s.frame.y;
+            let sun_side = if to_sun.dot(n) < 0.0 { -1.0 } else { 1.0 };
+            let along = dir.dot(n);
+            dir = (dir - n * along + n * sun_side * along.abs().max(0.35)).normalize();
+        }
         (i, dir * self.view_distance(i))
     }
 

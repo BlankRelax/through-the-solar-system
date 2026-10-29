@@ -157,9 +157,12 @@ for (const [n, id] of stops.entries()) {
     problems.push(`no label for ${id}`);
     continue;
   }
+  // Software rendering is slow: wait for the trip to start, then to end.
+  const near = () => evaluate(`document.querySelector('.tss-near').textContent`);
+  for (let t = 0; t < 20 && (await near()).startsWith('Visiting'); t++) await sleep(250);
   for (let t = 0; t < 120; t++) {
     await sleep(500);
-    if ((await evaluate(`document.querySelector('.tss-near').textContent`)).startsWith('Visiting')) break;
+    if ((await near()).startsWith('Visiting')) break;
   }
   await sleep(800);
   await shot(`${String(n + 2).padStart(2, '0')}-${id}`);

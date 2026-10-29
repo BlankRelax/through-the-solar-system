@@ -584,6 +584,15 @@
   color: var(--tss-accent);
 }
 
+.tss .tss-journal-list button {
+  flex-wrap: wrap;
+  row-gap: 2px;
+}
+
+.tss .tss-journal-list button > span {
+  white-space: nowrap;
+}
+
 .tss .tss-kind-small {
   margin-left: auto;
   font-family: var(--tss-mono);

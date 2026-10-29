@@ -105,6 +105,8 @@ pub struct Ui {
     pub canvas: HtmlCanvasElement,
     labels: Vec<Option<HtmlElement>>,
     label_shown: Vec<Option<(i32, i32)>>,
+    hud: HtmlElement,
+    bar: HtmlElement,
     date: HtmlElement,
     where_: HtmlElement,
     near: HtmlElement,
@@ -189,6 +191,8 @@ impl Ui {
             canvas,
             labels,
             label_shown: vec![None; BODIES.len()],
+            hud: find(&root, ".tss-hud"),
+            bar: find(&root, ".tss-bar"),
             date: find(&root, ".tss-date"),
             where_: find(&root, ".tss-where"),
             near: find(&root, ".tss-near"),
@@ -234,6 +238,35 @@ impl Ui {
     }
 
     // --- labels ---------------------------------------------------------------
+
+    /// The open panel's rectangle (left, top, right, bottom) relative to
+    /// the game's corner.
+    pub fn panel_rect(&self) -> Option<(f64, f64, f64, f64)> {
+        if self.panel.hidden() {
+            return None;
+        }
+        let o = self.root.get_bounding_client_rect();
+        let r = self.panel.get_bounding_client_rect();
+        Some((r.left() - o.left(), r.top() - o.top(), r.right() - o.left(), r.bottom() - o.top()))
+    }
+
+    pub fn hud_bottom(&self) -> f64 {
+        self.hud.get_bounding_client_rect().bottom() - self.root.get_bounding_client_rect().top()
+    }
+
+    /// Screen areas labels should keep clear of (left, top, right, bottom,
+    /// in CSS pixels from the game's corner): the readout, the control bar,
+    /// an open panel and the toast.
+    pub fn obstacles(&self) -> Vec<(f64, f64, f64, f64)> {
+        let origin = self.root.get_bounding_client_rect();
+        [&self.hud, &self.bar, &self.panel, &self.toast]
+            .into_iter()
+            .filter(|e| !e.hidden() && (!e.class_list().contains("tss-toast") || e.class_list().contains("is-on")))
+            .map(|e| e.get_bounding_client_rect())
+            .filter(|r| r.width() > 0.0 && r.height() > 0.0)
+            .map(|r| (r.left() - origin.left(), r.top() - origin.top(), r.right() - origin.left(), r.bottom() - origin.top()))
+            .collect()
+    }
 
     /// Show the label of body `i` at (x, y) CSS pixels, or hide it.
     pub fn place_label(&mut self, i: usize, at: Option<(f64, f64)>, selected: bool) {

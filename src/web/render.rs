@@ -7,7 +7,7 @@ use crate::camera::Camera;
 use crate::catalog::{Kind, Motion, Shade, BODIES};
 use crate::mesh;
 use crate::sim::Sim;
-use glam::{DVec3, Mat3, Mat4, Vec3};
+use glam::{DVec3, Mat3, Vec3};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -269,7 +269,7 @@ impl Renderer {
         gl.clear(GL::COLOR_BUFFER_BIT | GL::DEPTH_BUFFER_BIT);
 
         let cam = s.cam;
-        let proj = Mat4::perspective_rh_gl(cam.fov as f32, (s.width / s.height) as f32, NEAR, FAR);
+        let proj = cam.projection(s.width / s.height, NEAR, FAR);
         let view = cam.view_rotation();
         let vp = proj * view;
         let logf = 1.0 / (FAR + 1.0).log2();

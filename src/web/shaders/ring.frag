@@ -32,8 +32,10 @@ void main() {
   vec3 L = normalize(u_sun - v_world);
   float sunSide = dot(L, u_normal);
   float viewSide = dot(-v_world, u_normal);
-  float lit = 0.2 + 0.8 * sqrt(abs(sunSide));
-  if (sunSide * viewSide < 0.0) lit *= 0.5 * (1.0 - c.a * 0.6);  // the unlit face
+  // Ring particles scatter light well even when the Sun is low over the
+  // rings; the unlit face glows only where the rings are thin.
+  float lit = 0.3 + 0.7 * pow(abs(sunSide), 0.3);
+  if (sunSide * viewSide < 0.0) lit *= 0.6 * (1.0 - c.a * 0.55);  // the unlit face
   vec3 oc = u_center - v_world;
   float s = dot(oc, L);
   if (s > 0.0) lit *= mix(0.05, 1.0, smoothstep(u_planetR * 0.97, u_planetR * 1.02, length(oc - L * s)));

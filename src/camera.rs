@@ -1,6 +1,6 @@
 //! The point of view: where you are and which way you face.
 
-use glam::{DMat3, DQuat, DVec3, Mat4};
+use glam::{DMat3, DQuat, DVec2, DVec3, Mat4, Vec3};
 
 #[derive(Clone, Copy, Debug)]
 pub struct Camera {
@@ -8,6 +8,9 @@ pub struct Camera {
     pub rot: DQuat,
     /// Vertical field of view, radians.
     pub fov: f64,
+    /// Lens shift in normalised device coordinates: moves the picture on
+    /// screen (to keep an object clear of a panel) without turning the view.
+    pub shift: DVec2,
 }
 
 impl Camera {
@@ -38,9 +41,15 @@ impl Camera {
         }
         let depth = -v.z;
         let f = 1.0 / (self.fov / 2.0).tan();
-        let x = v.x * f / (width / height) / depth;
-        let y = v.y * f / depth;
+        let x = v.x * f / (width / height) / depth + self.shift.x;
+        let y = v.y * f / depth + self.shift.y;
         Some(((x + 1.0) * 0.5 * width, (1.0 - y) * 0.5 * height, depth))
+    }
+
+    /// The projection matrix, lens shift included.
+    pub fn projection(&self, aspect: f64, near: f32, far: f32) -> Mat4 {
+        Mat4::from_translation(Vec3::new(self.shift.x as f32, self.shift.y as f32, 0.0))
+            * Mat4::perspective_rh_gl(self.fov as f32, aspect as f32, near, far)
     }
 
     /// Pixels per display unit at a given depth.
@@ -76,7 +85,7 @@ mod tests {
     #[test]
     fn look_rotation_faces_forward() {
         let q = look_rotation(DVec3::new(1.0, 0.2, 0.3), DVec3::Y);
-        let cam = Camera { pos: DVec3::ZERO, rot: q, fov: 1.0 };
+        let cam = Camera { pos: DVec3::ZERO, rot: q, fov: 1.0, shift: DVec2::ZERO };
         assert!((cam.forward() - DVec3::new(1.0, 0.2, 0.3).normalize()).length() < 1e-9);
         let (x, y, _) = cam.project(DVec3::new(1.0, 0.2, 0.3) * 5.0, 800.0, 600.0).unwrap();
         assert!((x - 400.0).abs() < 1e-6 && (y - 300.0).abs() < 1e-6);

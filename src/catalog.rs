@@ -202,6 +202,8 @@ pub mod feature {
     pub const CERES: i32 = 11;
     pub const ICY: i32 = 12;
     pub const MIRANDA: i32 = 13;
+    /// Spacecraft: smooth painted surfaces, no terrain.
+    pub const SPACECRAFT: i32 = 14;
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -250,6 +252,7 @@ impl Look {
     const VOYAGER: Look = Look {
         color: [0.86, 0.85, 0.82],
         color2: [0.72, 0.6, 0.32],
+        feature: feature::SPACECRAFT,
         craters: 0.0,
         lobes: &[
             Lobe { offset: [0.0, 0.18, 0.0], scale: [0.62, 0.1, 0.62] },
@@ -265,6 +268,7 @@ impl Look {
     const NEW_HORIZONS: Look = Look {
         color: [0.85, 0.8, 0.6],
         color2: [0.7, 0.58, 0.3],
+        feature: feature::SPACECRAFT,
         craters: 0.0,
         lobes: &[
             Lobe { offset: [0.0, 0.3, 0.0], scale: [0.5, 0.08, 0.5] },

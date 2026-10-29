@@ -8,7 +8,7 @@ use crate::format::{fmt_au, fmt_duration, fmt_num};
 use crate::camera::{look_rotation, smoothstep, Camera};
 use crate::catalog::{Kind, Motion, BODIES};
 use crate::sim::{Sim, FIRST_DAY, LAST_DAY};
-use glam::{DQuat, DVec3};
+use glam::{DQuat, DVec2, DVec3};
 use std::cell::RefCell;
 use std::collections::{HashSet, VecDeque};
 use std::rc::Rc;
@@ -148,6 +148,17 @@ pub struct App {
     height: f64,
     dpr: f64,
     now_ms: f64,
+    /// Circling high above the Sun (the start and the Home view) rather
+    /// than visiting it.
+    overview: bool,
+    obstacles: Vec<(f64, f64, f64, f64)>,
+    /// Where the visited object should sit on screen (lens shift) and how
+    /// much further back to stand, so that an open panel does not cover it.
+    frame_goal: (DVec2, f64),
+    frame_k: f64,
+    /// The circled object's direction from the Sun last frame: the view
+    /// turns with it, so its lit face stays in sight as time runs.
+    sun_dir: Option<DVec3>,
 }
 
 fn ease(s: f64) -> f64 {
@@ -162,7 +173,7 @@ impl App {
     pub fn new(renderer: Renderer, ui: Ui, queue: Queue, now_ms: f64, reduced_motion: bool, storage: Option<Storage>) -> App {
         let days = astro::days_from_unix_ms(now_ms).clamp(FIRST_DAY, LAST_DAY);
         let sim = Sim::new(days);
-        let cam = Camera { pos: OVERVIEW, rot: look_rotation(-OVERVIEW, DVec3::Y), fov: 55f64.to_radians() };
+        let cam = Camera { pos: OVERVIEW, rot: look_rotation(-OVERVIEW, DVec3::Y), fov: 55f64.to_radians(), shift: DVec2::ZERO };
         let mut visited = vec![false; BODIES.len()];
         if let Some(saved) = storage.as_ref().and_then(|s| s.get_item(JOURNAL_KEY).ok().flatten()) {
             for id in saved.split(',') {
@@ -200,6 +211,11 @@ impl App {
             height: 1.0,
             dpr: 1.0,
             now_ms,
+            overview: true,
+            obstacles: Vec::new(),
+            frame_goal: (DVec2::ZERO, 1.0),
+            frame_k: 1.0,
+            sun_dir: None,
         };
         app.ui.update_journal(&app.visited);
         app.ui.set_toggles(true, true);
@@ -243,6 +259,8 @@ impl App {
         if now_ms - self.hud_ms > 100.0 {
             self.hud_ms = now_ms;
             self.update_hud();
+            self.obstacles = self.ui.obstacles();
+            self.frame_goal = self.framing_goal();
         }
         self.ui.tick(now_ms);
     }
@@ -444,12 +462,15 @@ impl App {
             Action::Home => {
                 self.ui.hide_intro();
                 self.travel_to(0, 0, OVERVIEW);
+                self.overview = true;
             }
         }
     }
 
     fn go_free(&mut self) {
         self.mode = Mode::Free;
+        self.overview = false;
+        self.sun_dir = None;
     }
 
     /// The body under a screen point: the nearest one whose disc (or, for
@@ -519,11 +540,41 @@ impl App {
         }
         let ratio = (start.length() / end.length()).max(end.length() / start.length());
         let turn = start.normalize().angle_between(end.normalize());
+        self.overview = false;
+        self.sun_dir = None;
         let duration = if self.reduced_motion { 0.0 } else { (1.4 + 0.7 * ratio.ln() + 0.5 * turn).clamp(1.4, 8.0) };
         self.mode = Mode::Travel(Travel { target, subject, start, end, from_rot: self.cam.rot, t: 0.0, duration });
     }
 
+    /// Keep the visited object clear of the panel: centred in the space
+    /// above a bottom sheet (phones) or beside a side panel that reaches the
+    /// middle of the screen, and a little further away if that space is small.
+    fn framing_goal(&self) -> (DVec2, f64) {
+        let none = (DVec2::ZERO, 1.0);
+        if self.overview || matches!(self.mode, Mode::Free) {
+            return none;
+        }
+        let Some((left, top, _, _)) = self.ui.panel_rect() else { return none };
+        let (w, h) = (self.width, self.height);
+        // How big a planet looks from its usual viewing distance, as a share of the height.
+        let size = 0.25 * h;
+        if top > h * 0.25 && left < w * 0.2 {
+            let above = self.ui.hud_bottom().clamp(0.0, top * 0.4);
+            let free = (top - above).max(h * 0.15);
+            let cy = above + free / 2.0;
+            (DVec2::new(0.0, 1.0 - 2.0 * cy / h), (size / (0.4 * free)).clamp(1.0, 3.0))
+        } else if left > w * 0.3 && left < w * 0.62 {
+            (DVec2::new(left / w - 1.0, 0.0), (size / (0.4 * left)).clamp(1.0, 3.0))
+        } else {
+            none
+        }
+    }
+
     fn move_camera(&mut self, dt: f64) {
+        let ease_in = 1.0 - (-dt * 5.0).exp();
+        self.cam.shift += (self.frame_goal.0 - self.cam.shift) * ease_in;
+        self.frame_k += (self.frame_goal.1 - self.frame_k) * ease_in;
+        let k = self.frame_k;
         let held = |app: &App, codes: &[&str]| codes.iter().any(|c| app.keys.contains(*c));
         let mut thrust = DVec3::ZERO;
         for (codes, dir) in [
@@ -539,7 +590,7 @@ impl App {
             }
         }
         if thrust != DVec3::ZERO && !matches!(self.mode, Mode::Free) {
-            self.mode = Mode::Free;
+            self.go_free();
         }
         let turn_x = (held(self, &["ArrowLeft"]) as i32 - held(self, &["ArrowRight"]) as i32) as f64;
         let turn_y = (held(self, &["ArrowUp"]) as i32 - held(self, &["ArrowDown"]) as i32) as f64;
@@ -558,7 +609,18 @@ impl App {
                     self.cam.pos += (self.cam.rot * thrust.normalize()) * speed * dt;
                 }
             }
-            Mode::Orbit { target, offset, subject } => {
+            Mode::Orbit { target, mut offset, subject } => {
+                let from_sun = self.sim.states[target].pos;
+                if from_sun.length() > 1e-6 {
+                    let d = from_sun.normalize();
+                    if let Some(prev) = self.sun_dir {
+                        let q = DQuat::from_rotation_arc(prev, d);
+                        offset = q * offset;
+                        self.cam.rot = (q * self.cam.rot).normalize();
+                        self.mode = Mode::Orbit { target, offset, subject };
+                    }
+                    self.sun_dir = Some(d);
+                }
                 if turn_x != 0.0 || turn_y != 0.0 {
                     let a = 1.2 * dt;
                     let q = DQuat::from_axis_angle(self.cam.up(), -turn_x * a) * DQuat::from_axis_angle(self.cam.right(), turn_y * a);
@@ -566,24 +628,26 @@ impl App {
                     self.cam.rot = (q * self.cam.rot).normalize();
                 }
                 if let Mode::Orbit { target, offset, .. } = self.mode {
-                    self.cam.pos = self.sim.states[target].pos + offset;
+                    self.cam.pos = self.sim.states[target].pos + offset * k;
                 }
             }
             Mode::Travel(mut t) => {
                 t.t += dt;
                 let s = if t.duration > 0.0 { (t.t / t.duration).min(1.0) } else { 1.0 };
                 let e = ease(s);
-                let d = (t.start.length().ln() * (1.0 - e) + t.end.length().ln() * e).exp();
+                let d = (t.start.length().ln() * (1.0 - e) + (t.end.length() * k).ln() * e).exp();
                 let arc = DQuat::from_rotation_arc(t.start.normalize(), t.end.normalize());
                 let dir = DQuat::IDENTITY.slerp(arc, e) * t.start.normalize();
                 let tp = self.sim.states[t.target].pos;
                 self.cam.pos = tp + dir * d;
                 self.keep_outside_bodies(Some(t.target));
-                let look = look_rotation(tp - self.cam.pos, self.cam.up());
+                // Arrive with ecliptic north up, whatever way you were rolled.
+                let level = |f: DVec3, up: DVec3| if f.normalize().dot(DVec3::Y).abs() < 0.97 { DVec3::Y } else { up };
+                let look = look_rotation(tp - self.cam.pos, level(tp - self.cam.pos, self.cam.up()));
                 self.cam.rot = t.from_rot.slerp(look, smoothstep(s / 0.35)).normalize();
                 if s >= 1.0 {
-                    self.cam.pos = tp + t.end;
-                    self.cam.rot = look_rotation(-t.end, self.cam.up());
+                    self.cam.pos = tp + t.end * k;
+                    self.cam.rot = look_rotation(-t.end, level(-t.end, self.cam.up()));
                     self.mode = Mode::Orbit { target: t.target, offset: t.end, subject: t.subject };
                     self.arrive(t.subject);
                 } else {
@@ -632,6 +696,10 @@ impl App {
     }
 
     fn arrive(&mut self, subject: usize) {
+        if self.overview {
+            self.ui.toast("Above the planets. Click anything to read about it.", self.now_ms);
+            return;
+        }
         let b = &BODIES[subject];
         self.visit(subject);
         if self.selected != Some(subject) {
@@ -667,8 +735,11 @@ impl App {
 
     fn check_journal(&mut self) {
         let cam_au = Sim::au_from_sun(self.cam.pos);
+        // Regions count when you stop in them, not when the autopilot
+        // carries you through on the way somewhere else.
+        let passing = matches!(self.mode, Mode::Travel(_));
         for i in 0..BODIES.len() {
-            if self.visited[i] || !self.sim.states[i].exists {
+            if self.visited[i] || !self.sim.states[i].exists || (passing && BODIES[i].is_region()) {
                 continue;
             }
             let near = match BODIES[i].id {
@@ -702,13 +773,33 @@ impl App {
                 _ => 3,
             }
         };
+        let (w, h) = (self.width, self.height);
+        let project = |i: usize| -> Option<(f64, f64, f64, f64)> {
+            let st = &self.sim.states[i];
+            if !st.exists {
+                return None;
+            }
+            let (x, y, depth) = self.cam.project(st.pos - self.cam.pos, w, h)?;
+            Some((x, y, st.radius * self.cam.pixels_per_unit(depth, h), (st.pos - self.cam.pos).length()))
+        };
+        let on_screen = |p: Option<(f64, f64, f64, f64)>| p.is_some_and(|(x, y, _, _)| x > 0.0 && x < w && y > 0.0 && y < h);
+        let screen: Vec<Option<(f64, f64, f64, f64)>> = (0..BODIES.len()).map(project).collect();
+        // Discs big enough to hide what is behind them.
+        let discs: Vec<(usize, f64, f64, f64, f64)> = screen
+            .iter()
+            .enumerate()
+            .filter(|&(i, _)| !BODIES[i].is_region() && BODIES[i].look.shade != crate::catalog::Shade::Ghost)
+            .filter_map(|(i, p)| p.filter(|p| p.2 > 3.0).map(|(x, y, r, d)| (i, x, y, r, d)))
+            .collect();
+        let sun = screen[0];
+
         let mut order: Vec<usize> = (0..BODIES.len()).collect();
         order.sort_by_key(|&i| rank(i));
-        let mut placed: Vec<(f64, f64, f64, f64)> = Vec::new();
+        let mut placed = self.obstacles.clone();
+        let reserved = placed.len();
         let mut shown = vec![false; BODIES.len()];
         for i in order {
             let b = &BODIES[i];
-            let st = &self.sim.states[i];
             let is_selected = Some(i) == selected;
             // Far-flung things are labelled once you are far enough out to care.
             let relevant = is_selected
@@ -719,38 +810,54 @@ impl App {
                     _ => true,
                 };
             let mut at = None;
-            if (self.show_labels || is_selected) && st.exists && relevant {
-                let c = st.pos - self.cam.pos;
-                if let Some((x, y, depth)) = self.cam.project(c, self.width, self.height) {
-                    let ppu = self.cam.pixels_per_unit(depth, self.height);
-                    let r = (st.radius * ppu).min(self.height);
-                    let mut visible = r < self.height * 0.9;
-                    // A moon is labelled once it separates from its planet,
-                    // and only alongside the planet's own label.
-                    if b.kind == Kind::Moon && !is_selected {
-                        if let Some(p) = self.sim.parent[i] {
-                            let sep = (st.pos - self.sim.states[p].pos).length() * ppu;
-                            visible &= sep > 28.0 && shown[p];
+            if let (true, true, Some((x, y, r, dist))) = (self.show_labels || is_selected, relevant, screen[i]) {
+                let r = r.min(h);
+                let mut visible = r < h * 0.9;
+                // Hidden behind a nearer planet or moon.
+                visible &= !discs.iter().any(|&(j, dx, dy, dr, dd)| j != i && dd < dist && (x - dx).powi(2) + (y - dy).powi(2) < dr * dr);
+                if !is_selected {
+                    match (b.kind, self.sim.parent[i]) {
+                        // A moon is labelled once it separates from its planet,
+                        // and alongside the planet's own label when that is in view.
+                        (Kind::Moon, Some(p)) => {
+                            let sep = (self.sim.states[i].pos - self.sim.states[p].pos).length() * self.cam.pixels_per_unit(dist, h);
+                            visible &= sep > 28.0 && (shown[p] || !on_screen(screen[p]));
                         }
-                    }
-                    let w = b.name.chars().count() as f64 * 7.2 + 16.0;
-                    let h = 22.0;
-                    let candidates = [
-                        (x, y + r + 6.0),
-                        (x, y - r - 6.0 - h),
-                        (x + r + 8.0 + w / 2.0, y - h / 2.0),
-                        (x - r - 8.0 - w / 2.0, y - h / 2.0),
-                    ];
-                    if visible {
-                        for (lx, ly) in candidates {
-                            let rect = (lx - w / 2.0, ly, lx + w / 2.0, ly + h);
-                            let on_screen = rect.0 > -w * 0.4 && rect.2 < self.width + w * 0.4 && rect.1 > 0.0 && rect.3 < self.height;
-                            let clear = !placed.iter().any(|p| rect.0 < p.2 && rect.2 > p.0 && rect.1 < p.3 && rect.3 > p.1);
-                            if on_screen && (clear || is_selected) {
-                                placed.push(rect);
-                                at = Some((lx, ly));
-                                break;
+                        // From far out, the inner planets crowd the Sun.
+                        (Kind::Star | Kind::Region, _) => {}
+                        (_, None | Some(0)) => {
+                            if let Some((sx, sy, _, _)) = sun {
+                                visible &= (x - sx).powi(2) + (y - sy).powi(2) > 24.0 * 24.0 || r > 6.0;
                             }
+                        }
+                        _ => {}
+                    }
+                }
+                let lw = b.name.chars().count() as f64 * 7.2 + 16.0;
+                let lh = 22.0;
+                let candidates = [
+                    (x, y + r + 6.0),
+                    (x, y - r - 6.0 - lh),
+                    (x + r + 8.0 + lw / 2.0, y - lh / 2.0),
+                    (x - r - 8.0 - lw / 2.0, y - lh / 2.0),
+                ];
+                if visible {
+                    for (lx, ly) in candidates {
+                        let rect = (lx - lw / 2.0, ly, lx + lw / 2.0, ly + lh);
+                        let fits = rect.0 > -lw * 0.4 && rect.2 < w + lw * 0.4 && rect.1 > 0.0 && rect.3 < h;
+                        let hits = |list: &[(f64, f64, f64, f64)]| list.iter().any(|p| rect.0 < p.2 && rect.2 > p.0 && rect.1 < p.3 && rect.3 > p.1);
+                        // The selected label may overlap other labels, but not the controls.
+                        let clear = !hits(&placed[..reserved]) && (is_selected || !hits(&placed[reserved..]));
+                        // Nor over the disc of anything nearer than the object it names.
+                        let behind = discs.iter().any(|&(j, dx, dy, dr, dd)| {
+                            let (nx, ny) = (dx.clamp(rect.0, rect.2), dy.clamp(rect.1, rect.3));
+                            j != i && dd < dist && (nx - dx).powi(2) + (ny - dy).powi(2) < dr * dr
+                        });
+                        let clear = clear && !behind;
+                        if fits && clear {
+                            placed.push(rect);
+                            at = Some((lx, ly));
+                            break;
                         }
                     }
                 }
@@ -767,6 +874,8 @@ impl App {
         let r = Sim::au_from_sun(self.cam.pos);
         let where_ = format!("{} from the Sun · sunlight here is {} old", fmt_au(r), fmt_duration(r * astro::LIGHT_SECONDS_PER_AU));
         let near = match self.mode {
+            Mode::Orbit { .. } if self.overview => "Overview: above the planets".to_string(),
+            Mode::Travel(_) if self.overview => "Flying to the overview".to_string(),
             Mode::Orbit { subject, .. } | Mode::Travel(Travel { subject, .. }) => {
                 let verb = if matches!(self.mode, Mode::Travel(_)) { "Flying to" } else { "Visiting" };
                 format!("{verb}: {}", BODIES[subject].name)

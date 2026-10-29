@@ -57,6 +57,7 @@ float height(vec3 p) {
     float e = angle(p, dirAt(19.8, 239.3)) / 0.1;
     if (e < 1.5) h += (e < 1.0 ? (e * e - 1.0) * 0.3 : 0.0) + exp(-pow((e - 1.0) * 5.0, 2.0)) * 0.12;
   }
+  if (u_feature == 14) return 0.0;
   return h + fbm(p * 4.0 + u_seed) * 0.08;
 }
 
@@ -120,6 +121,8 @@ vec3 surface(vec3 p, float h) {
     col = mix(col, vec3(0.97, 0.96, 0.92), clamp(spot, 0.0, 1.0));
   } else if (u_feature == 12) {  // icy dwarf planets: smooth, mottled
     col = mix(u_color2, u_color, smoothstep(-0.4, 0.4, n + 0.5 * n2));
+  } else if (u_feature == 14) {  // spacecraft: painted white dish, booms and bus
+    col = u_color;
   } else if (u_feature == 13) {  // Miranda: patchwork with grooved coronae
     float region = cellDist(p * 1.3 + u_seed);
     float stripes = 0.5 + 0.5 * sin(region * 60.0);
